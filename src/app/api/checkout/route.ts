@@ -4,7 +4,7 @@ import { MercadoPagoConfig, Preference } from 'mercadopago';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { title, amount } = body;
+    const { title, amount, bid_id } = body;
 
     const token = process.env.MP_ACCESS_TOKEN || process.env.MERCADOPAGO_ACCESS_TOKEN;
 
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     const preferenceData: any = {
       items: [
         {
-          id: 'rey-del-cerro',
+          id: bid_id || 'rey-del-cerro',
           title: `Pujar por el Cerro: ${title || 'Nuevo Rey'}`,
           quantity: 1,
           unit_price: Number(amount),
@@ -37,11 +37,14 @@ export async function POST(request: Request) {
         failure: `${baseUrl}/?status=failure`,
         pending: `${baseUrl}/?status=pending`,
       },
+      // Permite asociar el id de la puja a la transacción en los webhooks
+      external_reference: bid_id || '',
     };
 
-    // Mercado Pago requiere URLs de producción públicas para activar auto_return
+    // Solo se agregan auto_return y notification_url si está en producción (Vercel)
     if (!isLocalhost) {
       preferenceData.auto_return = 'approved';
+      preferenceData.notification_url = `${baseUrl}/api/webhooks/mercadopago`;
     }
 
     const result = await preference.create({ body: preferenceData });
