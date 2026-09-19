@@ -1,13 +1,16 @@
 import { NextResponse } from 'next/server';
 import { MercadoPagoConfig, Preference } from 'mercadopago';
 
-// Intenta leer del entorno o usa el token de producción directo de tu panel
-const ACCESS_TOKEN =
-  process.env.MP_ACCESS_TOKEN ||
-  process.env.MERCADOPAGO_ACCESS_TOKEN ||
-  'APP_USR-5248076773994358-091722-b8441c0c7a6c02085524884776145618-3699662628';
+// Lee el Access Token desde las variables de entorno para evitar exponer credenciales privadas
+const ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN || process.env.MERCADOPAGO_ACCESS_TOKEN;
 
-const client = new MercadoPagoConfig({ accessToken: ACCESS_TOKEN });
+if (!ACCESS_TOKEN) {
+  console.warn('Advertencia: No se encontró el ACCESS_TOKEN de Mercado Pago en las variables de entorno.');
+}
+
+const client = new MercadoPagoConfig({ 
+  accessToken: ACCESS_TOKEN || '' 
+});
 
 export async function POST(request: Request) {
   try {
@@ -27,6 +30,7 @@ export async function POST(request: Request) {
 
     const result = await preference.create({
       body: {
+        binary_mode: true, // Forzar aprobación o rechazo inmediato sin dejar transacciones pendientes
         items: [
           {
             id: 'bajatelo-bid',
@@ -52,12 +56,12 @@ export async function POST(request: Request) {
     });
 
     if (!result.init_point) {
-      throw new Error('No se generó el init_point');
+      throw new Error('No se generó el init_point en Mercado Pago');
     }
 
     return NextResponse.json({ init_point: result.init_point });
   } catch (error: any) {
-    console.error('Error en API Checkout:', error);
+    console.error('Error en API Checkout Mercado Pago:', error);
     return NextResponse.json(
       { error: error?.message || 'Error al conectar con Mercado Pago' },
       { status: 500 }
