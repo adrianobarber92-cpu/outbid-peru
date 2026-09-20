@@ -525,7 +525,7 @@ export default function Home() {
         {/* BARRA SUPERIOR */}
         <div className="cerro-topbar mb-4">
           <span className="cerro-brand self-start bg-white border-3 border-black rounded-2xl text-xs font-black tracking-widest shadow-[3px_3px_0px_#000] text-black">
-            EL REY DEL CERRO
+              ELREYDELCERRO.PE
           </span>
           <TimeSelector value={timeOfDay} onChange={setTimeOfDay} />
 
