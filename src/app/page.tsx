@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import KingDisplay from '../components/KingDisplay';
 import Link from 'next/link';
 import { useMetrics } from '../lib/useMetrics';
-import { Moon, Sun, Sunset } from 'lucide-react';
+import { Crown, Moon, Sun, Sunset, UserRound } from 'lucide-react';
 
 interface Bid {
   id: string;
@@ -58,47 +58,38 @@ const TIME_CONFIG: Record<TimeOfDay, TimeConfig> = {
 const ITEMS_PER_PAGE = 10;
 
 function UserAvatar({
-  url,
   imageUrl,
   alt,
   className = 'w-12 h-12',
+  fallback = 'person',
 }: {
-  url?: string;
   imageUrl?: string;
   alt: string;
   className?: string;
+  fallback?: 'crown' | 'person';
 }) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const imgSrc = useMemo(() => {
-    if (imageUrl && imageUrl.trim() !== '') {
-      return imageUrl.trim();
+    const raw = imageUrl?.trim();
+    if (!raw) return null;
+    try {
+      const parsed = new URL(raw);
+      return ['http:', 'https:'].includes(parsed.protocol) && !parsed.username && !parsed.password
+        ? parsed.toString()
+        : null;
+    } catch {
+      return null;
     }
-
-    if (url) {
-      const cleanUrl = url.trim().replace(/^https?:\/\//, '').replace(/^www\./, '');
-      if (cleanUrl.includes('instagram.com/')) {
-        const username = cleanUrl.split('instagram.com/')[1]?.split('/')[0]?.split('?')[0];
-        if (username) {
-          return `https://unavatar.io/instagram/${username}`;
-        }
-      }
-    }
-
-    return null;
-  }, [url, imageUrl]);
+  }, [imageUrl]);
 
   if (!imgSrc || failedSrc === imgSrc) {
     return (
       <div
-        className={`${className} bg-[#CBD5E1] border-2 border-black rounded-2xl flex items-center justify-center shrink-0 shadow-[2px_2px_0px_#000] overflow-hidden`}
+        className={`${className} ${fallback === 'crown' ? 'bg-[#FACC15]' : 'bg-[#CBD5E1]'} border-2 border-black rounded-2xl flex items-center justify-center shrink-0 shadow-[2px_2px_0px_#000] overflow-hidden`}
       >
-        <svg className="w-3/4 h-3/4 text-[#64748B]" viewBox="0 0 24 24" fill="currentColor">
-          <path
-            fillRule="evenodd"
-            d="M7.5 6a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM3.751 20.105a8.25 8.25 0 0116.498 0 .75.75 0 01-.437.695A18.683 18.683 0 0112 22.5c-2.786 0-5.433-.6-7.812-1.7a.75.75 0 01-.437-.695z"
-            clipRule="evenodd"
-          />
-        </svg>
+        {fallback === 'crown'
+          ? <Crown aria-hidden="true" className="h-3/5 w-3/5 text-black" strokeWidth={2.25} />
+          : <UserRound aria-hidden="true" className="h-3/5 w-3/5 text-[#64748B]" strokeWidth={2.25} />}
       </div>
     );
   }
@@ -107,6 +98,7 @@ function UserAvatar({
     <img
       src={imgSrc}
       alt={alt}
+      referrerPolicy="no-referrer"
       className={`${className} object-cover border-2 border-black rounded-2xl shadow-[2px_2px_0px_#000] bg-gray-100 shrink-0`}
       onError={() => setFailedSrc(imgSrc)}
     />
@@ -569,7 +561,7 @@ export default function Home() {
             clicks={metrics && king ? (metrics[`click:${king.id}`] ?? 0) : undefined}
             onVisit={() => king && trackClick(king.id)}
             accentColor={cfg.accent}
-            avatar={king ? <UserAvatar url={king.url} imageUrl={king.image_url} alt={king.title} className="w-full h-full" /> : undefined}
+            avatar={king ? <UserAvatar imageUrl={king.image_url} alt={king.title} className="w-full h-full" fallback="crown" /> : undefined}
           />
         )}
 
@@ -601,7 +593,6 @@ export default function Home() {
                     </span>
 
                     <UserAvatar
-                      url={bid.url}
                       imageUrl={bid.image_url}
                       alt={bid.title}
                       className="w-12 h-12"

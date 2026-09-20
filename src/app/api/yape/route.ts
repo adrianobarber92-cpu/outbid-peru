@@ -19,7 +19,7 @@ function link(value: unknown, optional = false) {
 }
 export async function GET(request: Request) {
   if (!admin(request)) return reply('Clave incorrecta.', 401);
-  const { data, error } = await db().from('bids').select('id,title,url,amount,status,operation_number,created_at').order('created_at', { ascending: true });
+  const { data, error } = await db().from('bids').select('id,title,url,image_url,amount,status,operation_number,created_at').order('created_at', { ascending: true });
   if (error) return reply('No se pudieron cargar las solicitudes.', 500);
   return NextResponse.json({ bids: data }, { headers: { 'Cache-Control': 'no-store' } });
 }

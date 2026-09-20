@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 
-type Bid = { id: string; title: string; amount: number; status: string; operation_number: string; created_at: string };
+type Bid = { id: string; title: string; url: string; image_url?: string; amount: number; status: string; operation_number: string; created_at: string };
 export default function AdminPage() {
   const [password, setPassword] = useState('');
   const [signedIn, setSignedIn] = useState(false);
@@ -58,7 +58,10 @@ export default function AdminPage() {
         {!visible.length && <p className="py-10 text-gray-600">No hay solicitudes {history ? 'revisadas' : 'pendientes'}.</p>}
         <div className="divide-y divide-gray-300">{visible.map(bid => <article key={bid.id} className="py-5 flex flex-col sm:flex-row gap-4 justify-between">
           <div className="min-w-0 break-words"><h2 className="font-bold text-lg">{bid.title} · S/ {Number(bid.amount).toFixed(2)}</h2>
-            <p>Operacion: {bid.operation_number || 'Sin numero'}</p><p className="text-sm text-gray-600">{new Date(bid.created_at).toLocaleString('es-PE', { timeZone: 'America/Lima' })}</p>
+            <p>Operacion: {bid.operation_number || 'Sin numero'}</p>
+            <p className="text-sm mt-2 break-all"><span className="font-semibold">Link:</span> <a href={bid.url} target="_blank" rel="noopener noreferrer nofollow" className="text-blue-700 underline">{bid.url}</a></p>
+            <p className="text-sm break-all"><span className="font-semibold">Foto/logo:</span> {bid.image_url ? <a href={bid.image_url} target="_blank" rel="noopener noreferrer nofollow" className="text-blue-700 underline">{bid.image_url}</a> : <span className="text-gray-500">No proporcionado</span>}</p>
+            <p className="text-sm text-gray-600 mt-2">{new Date(bid.created_at).toLocaleString('es-PE', { timeZone: 'America/Lima' })}</p>
             {bid.status === 'pending' && Number(bid.amount) < (highest ? highest + 0.5 : 1) && <p className="text-red-700 text-sm mt-2">Superada: revisar devolucion.</p>}
             {bid.status !== 'pending' && <p className="text-sm font-semibold">{bid.status === 'rejected' ? 'Rechazada' : 'Aprobada'}</p>}
           </div>
