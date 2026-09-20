@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import { supabase } from '../lib/supabase';
+import KingDisplay from '../components/KingDisplay';
+import Link from 'next/link';
+import { useMetrics } from '../lib/useMetrics';
+import { Moon, Sun, Sunset } from 'lucide-react';
 
 interface Bid {
   id: string;
@@ -13,7 +13,7 @@ interface Bid {
   url: string;
   image_url?: string;
   amount: number;
-  status: 'king' | 'active';
+  status: 'king' | 'active' | 'approved';
   created_at?: string;
 }
 
@@ -38,7 +38,7 @@ const TIME_CONFIG: Record<TimeOfDay, TimeConfig> = {
     accentSoft: '#60A5FA',
   },
   tarde: {
-    label: 'TARDECITO',
+    label: 'TARDECIDO',
     emoji: '🌅',
     bg: '/cerro-tarde.jpeg',
     overlay: 'bg-orange-950/20',
@@ -68,15 +68,10 @@ function UserAvatar({
   alt: string;
   className?: string;
 }) {
-  const [imgSrc, setImgSrc] = useState<string | null>(null);
-  const [hasError, setHasError] = useState(false);
-
-  useEffect(() => {
-    setHasError(false);
-
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const imgSrc = useMemo(() => {
     if (imageUrl && imageUrl.trim() !== '') {
-      setImgSrc(imageUrl.trim());
-      return;
+      return imageUrl.trim();
     }
 
     if (url) {
@@ -84,16 +79,15 @@ function UserAvatar({
       if (cleanUrl.includes('instagram.com/')) {
         const username = cleanUrl.split('instagram.com/')[1]?.split('/')[0]?.split('?')[0];
         if (username) {
-          setImgSrc(`https://unavatar.io/instagram/${username}`);
-          return;
+          return `https://unavatar.io/instagram/${username}`;
         }
       }
     }
 
-    setImgSrc(null);
+    return null;
   }, [url, imageUrl]);
 
-  if (!imgSrc || hasError) {
+  if (!imgSrc || failedSrc === imgSrc) {
     return (
       <div
         className={`${className} bg-[#CBD5E1] border-2 border-black rounded-2xl flex items-center justify-center shrink-0 shadow-[2px_2px_0px_#000] overflow-hidden`}
@@ -114,7 +108,7 @@ function UserAvatar({
       src={imgSrc}
       alt={alt}
       className={`${className} object-cover border-2 border-black rounded-2xl shadow-[2px_2px_0px_#000] bg-gray-100 shrink-0`}
-      onError={() => setHasError(true)}
+      onError={() => setFailedSrc(imgSrc)}
     />
   );
 }
@@ -132,20 +126,22 @@ function ComicButton({
   accent,
   small = false,
   disabled = false,
+  breathe = false,
 }: {
   children: React.ReactNode;
   onClick?: () => void;
   accent: string;
   small?: boolean;
   disabled?: boolean;
+  breathe?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       style={{ backgroundColor: accent, boxShadow: '4px 4px 0px #000000' }}
-      className={`border-3 border-black font-black rounded-2xl transition-all active:translate-x-[2px] active:translate-y-[2px] active:shadow-none disabled:opacity-50 ${
-        small ? 'px-3 py-1.5 text-xs' : 'px-8 py-4 text-base md:text-lg tracking-wider animate-[breath_2.5s_ease-in-out_infinite]'
+      className={`max-w-full whitespace-normal break-words border-3 border-black font-black rounded-2xl leading-tight transition-all active:translate-x-[2px] active:translate-y-[2px] active:shadow-none disabled:opacity-50 ${
+        small ? 'px-3 py-1.5 text-xs' : `mobile-safe-box px-5 py-4 text-base tracking-wider sm:w-auto sm:px-8 md:text-lg${breathe ? ' cerro-cta' : ''}`
       } text-black`}
     >
       {children}
@@ -161,28 +157,31 @@ function TimeSelector({
   onChange: (t: TimeOfDay) => void;
 }) {
   const options: TimeOfDay[] = ['dia', 'tarde', 'noche'];
+  const icons = { dia: Sun, tarde: Sunset, noche: Moon };
 
   return (
-    <div className="flex gap-1.5 border-3 border-black bg-white p-1.5 rounded-2xl shadow-[4px_4px_0px_#000]">
+    <div className="cerro-time-selector mobile-safe-box grid max-w-full grid-cols-3 gap-1.5 border-3 border-black bg-white p-1 rounded-2xl shadow-[4px_4px_0px_#000] sm:w-auto">
       {options.map((opt) => {
         const cfg = TIME_CONFIG[opt];
         const isActive = value === opt;
+        const Icon = icons[opt];
         return (
           <button
             key={opt}
             onClick={() => onChange(opt)}
             style={
               isActive
-                ? { backgroundColor: cfg.accentSoft, boxShadow: '2px 2px 0px #000' }
+                ? { backgroundColor: '#FACC15', boxShadow: '2px 2px 0px #000' }
                 : undefined
             }
-            className={`px-3 py-1.5 text-xs font-black border-2 rounded-xl transition-all ${
+            className={`flex min-w-0 items-center justify-center gap-1 overflow-hidden whitespace-nowrap px-1 py-1 text-center text-[8px] font-black border-2 rounded-xl transition-all min-[300px]:gap-1.5 min-[300px]:px-1.5 min-[300px]:text-[10px] sm:gap-2 sm:px-3 sm:text-xs ${
               isActive
                 ? 'border-black text-black font-black'
                 : 'border-transparent text-black/50 hover:text-black'
             }`}
           >
-            {cfg.emoji} {cfg.label}
+            <Icon aria-hidden="true" strokeWidth={2.5} className="size-2.5 shrink-0 min-[300px]:size-3 sm:size-3.5" />
+            <span>{cfg.label}</span>
           </button>
         );
       })}
@@ -232,7 +231,7 @@ function BidModal({
   minAmount: number;
   accent: string;
   onClose: () => void;
-  onConfirm: (data: { title: string; url: string; image_url: string; amount: number }) => void;
+  onConfirm: (data: { title: string; url: string; image_url: string; amount: number; operation_number: string }) => Promise<void>;
 }) {
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
@@ -240,32 +239,72 @@ function BidModal({
   const [amount, setAmount] = useState<number | string>(minAmount);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState<'form' | 'qr' | 'sent'>('form');
+  const [operation, setOperation] = useState('');
 
   const handleSubmit = async () => {
+    if (loading) return;
+    setError('');
     const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
 
     if (!title.trim() || !url.trim()) {
       setError('Escribe tu nombre o negocio y tu link.');
       return;
     }
-    if (isNaN(numAmount) || numAmount < minAmount) {
+    if (title.trim().length < 2) {
+      setError('El nombre debe tener al menos 2 caracteres.');
+      return;
+    }
+    const isValidLink = (value: string) => {
+      try {
+        const parsed = new URL(/^https?:\/\//i.test(value.trim()) ? value.trim() : `https://${value.trim()}`);
+        return ['http:', 'https:'].includes(parsed.protocol) && parsed.hostname.includes('.') && !parsed.username && !parsed.password;
+      } catch {
+        return false;
+      }
+    };
+    if (!isValidLink(url)) {
+      setError('Escribe un enlace valido, por ejemplo: instagram.com/tu_negocio');
+      return;
+    }
+    if (imageUrl.trim() && !isValidLink(imageUrl)) {
+      setError('El enlace de la foto no es valido. Corrigelo o deja ese campo vacio.');
+      return;
+    }
+    if (!Number.isFinite(numAmount) || (step === 'form' && numAmount < minAmount)) {
       setError(`Mínimo billete para bajártelo: ${formatSoles(minAmount)}`);
       return;
     }
 
+    if (numAmount > 999.99) {
+      setError('El monto maximo por solicitud es S/ 999.99.');
+      return;
+    }
+    if (step === 'form') { setStep('qr'); return; }
+    if (!/^[a-zA-Z0-9-]{4,40}$/.test(operation.trim())) {
+      setError('Ingresa el numero de operacion del comprobante, no el codigo de seguridad de 3 digitos.');
+      return;
+    }
     setLoading(true);
-    await onConfirm({
+    try {
+      await onConfirm({
       title: title.trim(),
-      url: url.trim().startsWith('http') ? url.trim() : `https://${url.trim()}`,
+      url: /^https?:\/\//i.test(url.trim()) ? url.trim() : `https://${url.trim()}`,
       image_url: imageUrl.trim(),
       amount: numAmount,
-    });
-    setLoading(false);
+      operation_number: operation.trim(),
+      });
+      setStep('sent');
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'No se pudo iniciar el pago. Intenta nuevamente.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="w-full max-w-md bg-white border-3 border-black rounded-3xl shadow-[8px_8px_0px_#000000] p-6">
+      <div className="yape-modal w-full max-w-md bg-white border-3 border-black rounded-3xl shadow-[8px_8px_0px_#000000] p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <span className="text-[11px] font-black tracking-widest text-black uppercase bg-yellow-300 px-2.5 py-1 border-2 border-black rounded-xl">
             SOLTAR BILLETE
@@ -283,7 +322,7 @@ function BidModal({
           BILLETE MÍNIMO PARA LA CIMA: <span className="text-orange-600 font-black">{formatSoles(minAmount)}</span>
         </p>
 
-        <div className="mt-5 space-y-3">
+        {step === 'form' && <div className="mt-6 space-y-3">
           <input
             type="text"
             placeholder="Tu nombre o el de tu negocio"
@@ -319,23 +358,44 @@ function BidModal({
             />
           </div>
 
-          {error && <p className="text-red-600 text-xs font-black">{error}</p>}
+          {error && <p role="alert" className="text-red-600 text-xs font-black">{error}</p>}
 
           <ComicButton onClick={handleSubmit} accent={accent} disabled={loading}>
-            {loading ? 'CONECTANDO A MERCADO PAGO...' : '💳 IR A PAGAR CON MERCADO PAGO 🚀'}
+            CONTINUAR CON YAPE
           </ComicButton>
-        </div>
+          <p className="text-xs text-black leading-relaxed">Revisaremos tu solicitud en un máximo de 20 minutos. Si todo está correcto, tu nombre estará listo para subir al cerro. 👑 Estás a un paso de la cima.</p>
+        </div>}
+        {step === 'qr' && <div className="mt-5 space-y-4 text-black text-center">
+          <h3 className="text-xl font-black">Paga con Yape</h3>
+          <p className="font-bold">Monto: {formatSoles(Number(amount))}</p>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/yape-qr.jpg" alt="QR de Yape del administrador" className="w-full max-w-64 max-h-72 object-contain mx-auto" />
+          <a href="/yape-qr.jpg" download="yape-qr.jpg" className="underline font-bold inline-block">Descargar QR</a>
+          <p className="text-sm">La publicacion es manual, despues de verificar el ingreso. El pago no reserva la cima; si otra puja te supera antes de la revision, el administrador gestionara tu devolucion.</p>
+          <label className="block text-left text-sm font-bold">Numero de operacion
+            <input value={operation} onChange={e => setOperation(e.target.value)} maxLength={40} autoComplete="off" className="mt-1 w-full border-2 border-black rounded-lg p-3 bg-white" />
+          </label>
+          {error && <p role="alert" className="text-red-700 font-bold text-sm">{error}</p>}
+          <ComicButton onClick={handleSubmit} accent={accent} disabled={loading}>{loading ? 'ENVIANDO...' : 'YA YAPEE, ENVIAR SOLICITUD'}</ComicButton>
+          <button onClick={() => { setStep('form'); setError(''); }} disabled={loading} className="underline text-sm">Volver a mis datos</button>
+        </div>}
+        {step === 'sent' && <div className="mt-6 space-y-4 text-black">
+          <h3 className="text-xl font-black">Solicitud enviada</h3>
+          <p>Tu Yape de {formatSoles(Number(amount))} esta pendiente de verificacion. Conserva tu comprobante. Tu puja aparecera cuando el administrador la apruebe.</p>
+          <p>Revision en un maximo de 20 minutos. Para consultas: <a href="https://www.instagram.com/9luizo/" target="_blank" rel="noopener noreferrer" className="underline">@9luizo</a>.</p>
+          <ComicButton onClick={onClose} accent={accent}>ENTENDIDO</ComicButton>
+        </div>}
       </div>
     </div>
   );
 }
 
 export default function Home() {
+  const { metrics, online, trackClick } = useMetrics();
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('tarde');
   const [bids, setBids] = useState<Bid[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
-  const [justCrowned, setJustCrowned] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
 
   const cfg = TIME_CONFIG[timeOfDay];
@@ -345,7 +405,8 @@ export default function Home() {
     try {
       const { data, error } = await supabase
         .from('bids')
-        .select('*')
+        .select('id,title,url,image_url,amount,status,created_at')
+        .in('status', ['king', 'active', 'approved'])
         .order('amount', { ascending: false });
 
       if (!error && data) {
@@ -358,40 +419,33 @@ export default function Home() {
     }
   }, []);
 
-  // CAPTURAR RETORNO DE MERCADO PAGO EN ENTORNO LOCAL
+  // RETORNO DE PAGO SI APLICA
   useEffect(() => {
     const queryParams = new URLSearchParams(window.location.search);
     const status = queryParams.get('status');
 
-    if (status === 'approved') {
-      const title = queryParams.get('title');
-      const url = queryParams.get('url');
-      const image_url = queryParams.get('image_url') || '';
-      const amount = Number(queryParams.get('amount'));
+    if (status) {
+      const messageByStatus: Record<string, string> = {
+        success: 'Pago recibido. Tu puja aparecerá apenas Mercado Pago confirme la operación.',
+        approved: 'Pago recibido. Tu puja aparecerá apenas Mercado Pago confirme la operación.',
+        pending: 'Tu pago quedó pendiente. Lo publicaremos cuando Mercado Pago lo apruebe.',
+        failure: 'El pago no se completó. Puedes intentarlo otra vez cuando quieras.',
+      };
 
-      if (title && amount) {
-        // Insertar directamente en Supabase si volvemos con pago aprobado
-        supabase
-          .from('bids')
-          .insert({
-            title,
-            url,
-            image_url,
-            amount,
-            status: 'active',
-          })
-          .then(() => {
-            fetchBids();
-            // Limpiar query params de la barra de direcciones
-            window.history.replaceState({}, document.title, window.location.pathname);
-          });
+      const message = messageByStatus[status];
+      if (message) {
+        alert(message);
       }
+
+      window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, [fetchBids]);
 
   // SUSCRIPCIÓN EN TIEMPO REAL
   useEffect(() => {
-    fetchBids();
+    const initialFetch = window.setTimeout(() => {
+      void fetchBids();
+    }, 0);
 
     const channel = supabase
       .channel('bids-realtime')
@@ -403,6 +457,7 @@ export default function Home() {
       .subscribe();
 
     return () => {
+      window.clearTimeout(initialFetch);
       supabase.removeChannel(channel);
     };
   }, [fetchBids]);
@@ -425,9 +480,9 @@ export default function Home() {
   const toIndex = Math.min(currentPage * ITEMS_PER_PAGE, rest.length);
 
   const handleConfirmBid = useCallback(
-    async (data: { title: string; url: string; image_url: string; amount: number }) => {
+    async (data: { title: string; url: string; image_url: string; amount: number; operation_number: string }) => {
       try {
-        const res = await fetch('/api/checkout', {
+        const res = await fetch('/api/yape', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -435,19 +490,20 @@ export default function Home() {
             url: data.url,
             image_url: data.image_url,
             amount: data.amount,
+            operation_number: data.operation_number,
           }),
         });
 
-        const responseData = await res.json();
+        const responseData = await res.json().catch(() => ({}));
 
-        if (responseData.init_point) {
-          window.location.href = responseData.init_point;
-        } else {
-          alert('Error al generar la pasarela de pago de Mercado Pago.');
+        if (!res.ok || !responseData.id) {
+          throw new Error(responseData.error || 'No se pudo guardar la solicitud.');
         }
       } catch (err) {
         console.error(err);
-        alert('Ocurrió un error al conectar con Mercado Pago.');
+        throw new Error(err instanceof Error && !(err instanceof TypeError)
+          ? err.message
+          : 'No se pudo conectar con el servidor. Revisa tu conexion e intenta nuevamente.');
       }
     },
     []
@@ -455,7 +511,7 @@ export default function Home() {
 
   return (
     <main
-      className="min-h-screen bg-cover bg-center bg-no-repeat relative flex flex-col"
+      className="min-h-screen bg-cover bg-center bg-no-repeat relative flex flex-col overflow-x-hidden"
       style={{ backgroundImage: `url(${cfg.bg})` }}
     >
       <div className={`absolute inset-0 ${cfg.overlay}`} />
@@ -465,13 +521,18 @@ export default function Home() {
         <TickerBar king={king} runnerUp={runnerUp} />
       </div>
 
-      <div className="relative z-10 max-w-3xl mx-auto px-4 py-6 w-full flex-1">
+      <div className="relative z-10 max-w-[672px] mx-auto px-4 py-6 w-full flex-1">
         {/* BARRA SUPERIOR */}
-        <div className="flex items-center justify-between mb-4">
-          <span className="bg-white border-3 border-black px-4 py-1.5 rounded-2xl text-xs font-black tracking-widest shadow-[3px_3px_0px_#000] text-black">
-            BAJATELO.PE
+        <div className="cerro-topbar mb-4">
+          <span className="cerro-brand self-start bg-white border-3 border-black rounded-2xl text-xs font-black tracking-widest shadow-[3px_3px_0px_#000] text-black">
+            EL REY DEL CERRO
           </span>
           <TimeSelector value={timeOfDay} onChange={setTimeOfDay} />
+
+          <div className="cerro-stats" aria-label="Estadisticas del cerro">
+          <div title="Entradas acumuladas desde la activacion del contador; no son personas unicas."><strong>{metrics ? (metrics.visits ?? 0).toLocaleString('es-PE') : '...'}</strong><span>visitas al cerro</span></div>
+          <div title="Sesiones conectadas ahora. Una persona puede tener mas de una sesion."><i className={online === null ? 'live-dot offline' : 'live-dot'} /><strong>{online === null ? '...' : online.toLocaleString('es-PE')}</strong><span>viendo ahora</span></div>
+          </div>
         </div>
 
         {/* HEADER CON LOGO */}
@@ -479,86 +540,42 @@ export default function Home() {
           <img
             src="/logo-rey.png"
             alt="El Rey del Cerro"
-            className="w-full max-w-xs sm:max-w-md md:max-w-lg h-auto drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)] animate-[breath_2.5s_ease-in-out_infinite]"
+            className="cerro-logo w-full max-w-xs sm:max-w-md md:max-w-lg h-auto drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)]"
           />
 
-          <p className="text-xs md:text-sm font-extrabold mt-3 max-w-lg bg-white border-3 border-black rounded-2xl px-5 py-2.5 shadow-[4px_4px_0px_#000] text-black">
+          <p className="mobile-safe-box max-w-full text-center text-xs md:text-sm font-extrabold mt-3 sm:max-w-lg bg-white border-3 border-black rounded-2xl px-5 py-2.5 shadow-[4px_4px_0px_#000] text-black">
             Cualquiera sube, pero solo el que tiene billete se queda arriba.
           </p>
         </header>
 
         {/* BOTÓN CTA PRINCIPAL */}
-        <div className="mb-8 flex justify-center">
-          <ComicButton onClick={() => setModalOpen(true)} accent={cfg.accentSoft}>
+        <div className="mb-3 flex justify-center">
+          <ComicButton onClick={() => setModalOpen(true)} accent={cfg.accentSoft} breathe>
             ¡EL CERRO ES MÍO! ✌️😂
           </ComicButton>
         </div>
 
         {/* ESTADO CARGANDO */}
         {loading && (
-          <div className="bg-white border-3 border-black rounded-2xl p-8 text-center font-black shadow-[5px_5px_0px_#000] text-black">
+          <div className="mobile-safe-box mx-auto max-w-full bg-white border-3 border-black rounded-2xl p-8 text-center font-black shadow-[5px_5px_0px_#000] text-black">
             CARGANDO EL CERRO...
           </div>
         )}
 
         {/* REY DEL CERRO (#1) */}
-        {!loading && king && (
-          <div className="mb-6">
-            <div
-              className={`bg-white border-3 border-black rounded-3xl p-6 md:p-8 shadow-[6px_6px_0px_#000000] transition-transform ${
-                justCrowned === king.id ? 'scale-[1.02]' : ''
-              }`}
-            >
-              <div className="flex items-center justify-between mb-4">
-                <span
-                  style={{ backgroundColor: cfg.accentSoft }}
-                  className="text-xs font-black tracking-widest px-3 py-1 rounded-xl border-2 border-black text-black"
-                >
-                  👑 REY ACTUAL DEL CERRO (#1)
-                </span>
-              </div>
-
-              {justCrowned === king.id && (
-                <p className="text-xs font-black mb-3 text-emerald-600 animate-bounce">
-                  🎉 ¡NUEVO REY EN LA CIMA!
-                </p>
-              )}
-
-              <a
-                href={king.url.startsWith('http') ? king.url : `https://${king.url}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex flex-col md:flex-row items-center gap-6 group"
-              >
-                <UserAvatar
-                  url={king.url}
-                  imageUrl={king.image_url}
-                  alt={king.title}
-                  className="w-28 h-28 md:w-36 md:h-36 group-hover:scale-105 transition-transform"
-                />
-
-                <div className="flex-1 text-center md:text-left">
-                  <h3 className="text-2xl md:text-4xl font-black leading-tight text-black">
-                    {king.title}
-                  </h3>
-                  <p className="text-xs mt-1 truncate max-w-xs mx-auto md:mx-0 font-semibold text-black/75">
-                    {king.url}
-                  </p>
-                  <p
-                    className="text-3xl md:text-5xl font-black mt-2 tracking-tight"
-                    style={{ color: cfg.accent }}
-                  >
-                    {formatSoles(king.amount)}
-                  </p>
-                </div>
-              </a>
-            </div>
-          </div>
+        {!loading && (
+          <KingDisplay
+            king={king}
+            clicks={metrics && king ? (metrics[`click:${king.id}`] ?? 0) : undefined}
+            onVisit={() => king && trackClick(king.id)}
+            accentColor={cfg.accent}
+            avatar={king ? <UserAvatar url={king.url} imageUrl={king.image_url} alt={king.title} className="w-full h-full" /> : undefined}
+          />
         )}
 
         {/* TABLERO PAGINADO DE ASPIRANTES (#2 EN ADELANTE) */}
         {!loading && rest.length > 0 && (
-          <div className="mt-8">
+          <div className="mt-3">
             <div className="mb-3 flex items-center justify-between">
               <div className="bg-white border-2 border-black px-3 py-1 rounded-xl shadow-[2px_2px_0px_#000]">
                 <p className="text-xs font-black tracking-wider uppercase text-black">
@@ -577,7 +594,7 @@ export default function Home() {
                 return (
                   <div
                     key={bid.id}
-                    className="flex items-center gap-3 px-4 py-3 border-b-2 last:border-b-0 border-black/15"
+                    className="bid-row border-b-2 last:border-b-0 border-black/15"
                   >
                     <span className="text-base md:text-lg font-black text-black/50 w-8 text-center shrink-0">
                       #{globalRank}
@@ -594,10 +611,13 @@ export default function Home() {
                       href={bid.url.startsWith('http') ? bid.url : `https://${bid.url}`}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={() => trackClick(bid.id)}
+                      onAuxClick={event => { if (event.button === 1) trackClick(bid.id); }}
                       className="flex-1 min-w-0"
                     >
                       <p className="text-sm font-black text-black truncate">{bid.title}</p>
-                      <p className="text-[11px] text-black/60 truncate font-semibold">{bid.url}</p>
+                      <p className="text-[11px] text-[#64748B] truncate font-semibold">{bid.url}</p>
+                      <p className="text-[11px] text-black/70 font-extrabold">{metrics ? (metrics[`click:${bid.id}`] ?? 0).toLocaleString('es-PE') : '...'} {metrics?.[`click:${bid.id}`] === 1 ? 'clic' : 'clics'}</p>
                     </a>
 
                     <span className="text-sm md:text-base font-black shrink-0 mr-1" style={{ color: cfg.accent }}>
@@ -618,7 +638,7 @@ export default function Home() {
                 <button
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  className="px-3 py-1.5 border-2 border-black rounded-xl font-black text-sm disabled:opacity-30 disabled:hover:bg-transparent hover:bg-yellow-300 text-black transition-colors"
+                  className="px-3 py-1.5 border-2 border-black rounded-xl font-black text-sm disabled:opacity-30 text-black transition-colors"
                 >
                   &lt;
                 </button>
@@ -655,7 +675,7 @@ export default function Home() {
                 <button
                   onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                   disabled={currentPage === totalPages}
-                  className="px-3 py-1.5 border-2 border-black rounded-xl font-black text-sm disabled:opacity-30 disabled:hover:bg-transparent hover:bg-yellow-300 text-black transition-colors"
+                  className="px-3 py-1.5 border-2 border-black rounded-xl font-black text-sm disabled:opacity-30 text-black transition-colors"
                 >
                   &gt;
                 </button>
@@ -670,7 +690,13 @@ export default function Home() {
 
         {/* FOOTER */}
         <footer className="mt-12 text-center">
-          <span className="text-[11px] font-black bg-white border-2 border-black rounded-2xl px-4 py-2 shadow-[3px_3px_0px_#000] inline-block text-black">
+          <div className="site-footer">
+            <nav aria-label="Informacion del sitio" className="flex flex-wrap justify-center gap-x-5 gap-y-3 my-4 text-sm">
+              <Link href="/about">About</Link><Link href="/rules">Rules</Link><Link href="/faq">FAQ</Link><Link href="/terms">Terms</Link><Link href="/privacy">Privacy</Link>
+            </nav>
+            <a href="https://www.instagram.com/9luizo/" target="_blank" rel="noopener noreferrer" className="text-sm underline">Contacto: @9luizo</a>
+          </div>
+          <span className="mobile-safe-box max-w-full text-[11px] font-black bg-white border-2 border-black rounded-2xl px-4 py-2 shadow-[3px_3px_0px_#000] inline-block text-black whitespace-normal break-words">
             METE TU BILLETE, BÁJATE AL REY Y QUÉDATE CON TODO EL CERRO.
           </span>
         </footer>
@@ -686,15 +712,6 @@ export default function Home() {
       )}
 
       <style jsx global>{`
-        @keyframes breath {
-          0%, 100% {
-            transform: scale(1);
-          }
-          50% {
-            transform: scale(1.08);
-          }
-        }
-
         @keyframes marquee {
           0% {
             transform: translateX(0%);

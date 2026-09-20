@@ -1,99 +1,139 @@
+import crypto from 'crypto';
 import { NextResponse } from 'next/server';
 import { MercadoPagoConfig, Payment } from 'mercadopago';
 import { createClient } from '@supabase/supabase-js';
-import crypto from 'crypto';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const mercadoPagoToken = process.env.MP_ACCESS_TOKEN || process.env.MERCADOPAGO_ACCESS_TOKEN;
+const webhookSecret = process.env.MERCADOPAGO_WEBHOOK_SECRET || process.env.MP_WEBHOOK_SECRET;
+
+function hasValidSignature(request: Request, paymentId: string | null) {
+  if (!webhookSecret) return true;
+
+  const signature = request.headers.get('x-signature');
+  const requestId = request.headers.get('x-request-id');
+  if (!signature || !requestId || !paymentId) return false;
+
+  const values = Object.fromEntries(
+    signature.split(',').map((part) => {
+      const [key, value] = part.split('=');
+      return [key?.trim(), value?.trim()];
+    })
+  );
+
+  if (!values.ts || !values.v1) return false;
+
+  const manifest = `id:${paymentId};request-id:${requestId};ts:${values.ts};`;
+  const expected = crypto.createHmac('sha256', webhookSecret).update(manifest).digest('hex');
+  const received = values.v1;
+
+  return (
+    expected.length === received.length &&
+    crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(received))
+  );
+}
+
+async function insertApprovedBid(metadata: Record<string, unknown>, paymentId: string) {
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error('Supabase no esta configurado para el webhook.');
+  }
+
+  const title = String(metadata.bid_title || '').trim().slice(0, 80);
+  const url = String(metadata.bid_url || '').trim().slice(0, 500);
+  const imageUrl = String(metadata.bid_image_url || '').trim().slice(0, 500);
+  const amount = Number(metadata.bid_amount);
+
+  if (!title || !url || !Number.isFinite(amount) || amount <= 0) {
+    throw new Error('Metadata de pago incompleta.');
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    auth: { persistSession: false },
+  });
+
+  const { data: existing, error: existingError } = await supabase
+    .from('bids')
+    .select('id')
+    .eq('payment_id', paymentId)
+    .maybeSingle();
+
+  const hasPaymentIdColumn = !(
+    existingError && String(existingError.message).includes('payment_id')
+  );
+
+  if (existingError && existingError.code !== 'PGRST116' && hasPaymentIdColumn) {
+    throw existingError;
+  }
+
+  if (existing) return;
+
+  const payload = {
+    title,
+    url,
+    image_url: imageUrl,
+    amount,
+    status: 'approved',
+    ...(hasPaymentIdColumn ? { payment_id: paymentId } : {}),
+  };
+
+  const { error } = await supabase.from('bids').insert(payload);
+
+  if (error) {
+    if (String(error.message).includes('payment_id')) {
+      const fallback = await supabase.from('bids').insert({
+        title,
+        url,
+        image_url: imageUrl,
+        amount,
+        status: 'approved',
+      });
+
+      if (fallback.error) throw fallback.error;
+      return;
+    }
+
+    throw error;
+  }
+}
 
 export async function POST(request: Request) {
   try {
     const url = new URL(request.url);
     const body = await request.json().catch(() => ({}));
-
-    // Detectar el ID de pago (viene por Query Params o en el Body de la notificación)
-    const id =
+    const paymentId =
       url.searchParams.get('id') ||
       url.searchParams.get('data.id') ||
       body?.data?.id ||
-      body?.id;
+      body?.id ||
+      null;
 
-    const type =
-      url.searchParams.get('type') ||
-      url.searchParams.get('topic') ||
-      body?.type ||
-      body?.action;
+    const topic = url.searchParams.get('topic') || url.searchParams.get('type') || body?.type;
 
-    // Obtener la clave secreta del webhook (Soporta ambas convenciones)
-    const webhookSecret = process.env.MERCADOPAGO_WEBHOOK_SECRET || process.env.MP_WEBHOOK_SECRET;
-
-    // 1. VALIDACIÓN DE SEGURIDAD (Firma de Mercado Pago)
-    if (webhookSecret) {
-      const xSignature = request.headers.get('x-signature');
-      const xRequestId = request.headers.get('x-request-id');
-
-      if (xSignature) {
-        const parts = xSignature.split(',');
-        let ts = '';
-        let hash = '';
-
-        parts.forEach((part) => {
-          const [key, value] = part.split('=');
-          if (key.trim() === 'ts') ts = value.trim();
-          if (key.trim() === 'v1') hash = value.trim();
-        });
-
-        const manifest = `id:${id};request-id:${xRequestId};ts:${ts};`;
-        const cHMAC = crypto
-          .createHmac('sha256', webhookSecret)
-          .update(manifest)
-          .digest('hex');
-
-        if (cHMAC !== hash) {
-          console.error('Firma de Webhook no válida.');
-          return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
-        }
-      }
+    if (!paymentId || (topic && !String(topic).includes('payment'))) {
+      return NextResponse.json({ received: true });
     }
 
-    // 2. PROCESAMIENTO DEL PAGO
-    if ((type === 'payment' || type === 'payment.created' || type === 'payment.updated') && id) {
-      // Soporta MP_ACCESS_TOKEN y MERCADOPAGO_ACCESS_TOKEN
-      const token = process.env.MERCADOPAGO_ACCESS_TOKEN || process.env.MP_ACCESS_TOKEN;
-      if (!token) return NextResponse.json({ error: 'No MP Token' }, { status: 500 });
-
-      const client = new MercadoPagoConfig({ accessToken: token });
-      const payment = new Payment(client);
-      const paymentData = await payment.get({ id: String(id) });
-
-      if (paymentData.status === 'approved' && paymentData.metadata) {
-        const { bid_title, bid_url, bid_image_url, bid_amount } = paymentData.metadata;
-
-        // Comprobar si esta puja supera al Rey actual
-        const { data: topBids } = await supabase
-          .from('bids')
-          .select('amount')
-          .order('amount', { ascending: false })
-          .limit(1);
-
-        const currentKingAmount = topBids && topBids[0] ? topBids[0].amount : 0;
-        const isNewKing = Number(bid_amount) > currentKingAmount;
-
-        // Insertar la nueva puja confirmada en Supabase
-        await supabase.from('bids').insert({
-          title: bid_title,
-          url: bid_url,
-          image_url: bid_image_url,
-          amount: Number(bid_amount),
-          status: isNewKing ? 'king' : 'active',
-        });
-      }
+    if (!hasValidSignature(request, String(paymentId))) {
+      return NextResponse.json({ error: 'Firma invalida.' }, { status: 401 });
     }
 
-    return NextResponse.json({ received: true }, { status: 200 });
-  } catch (error: any) {
-    console.error('Error procesando Webhook:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!mercadoPagoToken) {
+      return NextResponse.json({ error: 'Mercado Pago no esta configurado.' }, { status: 500 });
+    }
+
+    const client = new MercadoPagoConfig({ accessToken: mercadoPagoToken });
+    const payment = new Payment(client);
+    const paymentData = await payment.get({ id: String(paymentId) });
+
+    if (paymentData.status === 'approved' && paymentData.metadata) {
+      await insertApprovedBid(paymentData.metadata as Record<string, unknown>, String(paymentId));
+    }
+
+    return NextResponse.json({ received: true });
+  } catch (error) {
+    console.error('Error en webhook Mercado Pago:', error);
+    const message = error instanceof Error ? error.message : 'Error procesando webhook.';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
