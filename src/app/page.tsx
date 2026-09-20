@@ -74,9 +74,14 @@ function UserAvatar({
     if (!raw) return null;
     try {
       const parsed = new URL(raw);
-      return ['http:', 'https:'].includes(parsed.protocol) && !parsed.username && !parsed.password
-        ? parsed.toString()
-        : null;
+      if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) return null;
+
+      const hostname = parsed.hostname.toLowerCase();
+      if (['imgur.com', 'www.imgur.com', 'm.imgur.com'].includes(hostname)) {
+        return `/api/avatar?url=${encodeURIComponent(parsed.toString())}`;
+      }
+
+      return parsed.toString();
     } catch {
       return null;
     }
