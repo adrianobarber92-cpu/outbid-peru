@@ -18,7 +18,7 @@ const nunito = Nunito({
 });
 
 export const metadata: Metadata = {
-  title: "El Rey del Cerro | ELREYDELCERRO.PE",
+  title: "El Rey del Cerro | ELREYDELCERRO.XYZ",
   description: "Tu nombre, tu negocio y tu enlace en la cima del cerro. Puja con Yape y sube en el ranking.",
 };
 
