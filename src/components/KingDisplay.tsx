@@ -16,22 +16,22 @@ export default function KingDisplay({ king, avatar, clicks, onVisit, accentColor
   }).format(king?.amount ?? 1);
 
   const content = <>
-    <span className="king-frame__badge">{king && <span className="king-frame__rank">#1</span>}{king ? 'REY DEL CERRO' : 'LA CIMA ESTA LIBRE'}</span>
+    <span className="king-frame__badge">{king && <span className="king-frame__rank">#1</span>}{king ? 'REY DEL CERRO' : 'EL CERRO ESTÁ LIBRE'}</span>
     <div className="king-frame__identity">
       {avatar && <div className="king-frame__avatar">{avatar}</div>}
       <div className="king-frame__name">
-        <h2 className={(king?.title.length ?? 0) > 18 ? 'king-frame__title-long' : undefined} title={king?.title}>{king?.title ?? 'Tu lugar esta aqui'}</h2>
+        <h2 className={(king?.title.length ?? 0) > 18 ? 'king-frame__title-long' : undefined} title={king?.title}>{king?.title ?? 'Sé el primero en conquistarlo.'}</h2>
         {king && <p title={king.url}>{king.url.replace(/^https?:\/\//i, '')}</p>}
         {king && <p className="king-frame__clicks">{clicks === undefined ? '...' : clicks.toLocaleString('es-PE')} {clicks === 1 ? 'clic' : 'clics'}</p>}
       </div>
     </div>
     <div className={`king-frame__amount${(king?.amount ?? 1) >= 1000 ? ' king-frame__amount-long' : ''}`}>
-      <span>{king ? 'ES EL REY POR' : 'SE EL PRIMER REY POR'}</span>
+      <span>{king ? 'ES EL REY POR' : 'PRIMERA PUJA'}</span>
       <strong style={{ color: accentColor }}>{amount}</strong>
     </div>
   </>;
 
-  return <section className="king-frame" aria-label={king ? 'Rey del cerro' : 'Cima vacante'}>
+  return <section className="king-frame" aria-label={king ? 'Rey del cerro' : 'El cerro está libre'}>
     {king ? <a
       href={/^https?:\/\//i.test(king.url) ? king.url : `https://${king.url}`}
       target="_blank" rel="noopener noreferrer nofollow"

@@ -566,7 +566,7 @@ export default function Home() {
             clicks={metrics && king ? (metrics[`click:${king.id}`] ?? 0) : undefined}
             onVisit={() => king && trackClick(king.id)}
             accentColor={cfg.accent}
-            avatar={king ? <UserAvatar imageUrl={king.image_url} alt={king.title} className="w-full h-full" fallback="crown" /> : undefined}
+            avatar={<UserAvatar imageUrl={king?.image_url} alt={king?.title ?? 'Corona del cerro'} className="w-full h-full" fallback="crown" />}
           />
         )}
 
